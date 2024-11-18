@@ -1,0 +1,23 @@
+userName: 
+accessKey: 
+platforms:
+  - os: OS X
+    osVersion: Sequoia
+    browserName: Chrome
+    browserVersion: 131
+    # "bstack:options":
+    #   local: false
+      
+    #   # windowSize: "fullscreen"
+    #   enablePopups: false
+buildIdentifier: "${BUILD_NUMBER}"
+consoleLogs: info
+buildName: "After Ntwork LOGS"
+# seleniumVersion: 4.25.0
+# parallelsPerPlatform: 2
+projectName: "AV project"
+# resolution: 1920x1080
+debug: false
+networkLogs: false
+browserstackLocal: false
+
