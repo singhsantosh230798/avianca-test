@@ -1,0 +1,16 @@
+# macOS system files
+.DS_Store
+
+# JetBrains IDE project files
+.idea/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Python cache files
+__pycache__/
+*.pyc
