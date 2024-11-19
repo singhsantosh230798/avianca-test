@@ -1,15 +1,18 @@
-userName: 
-accessKey: 
+userName: santoshsingh_kOMZyg
+accessKey: bTqX8CkigAAVsAzt4VrM
 platforms:
   - os: OS X
     osVersion: Sequoia
     browserName: Chrome
     browserVersion: 131
-    # "bstack:options":
-    #   local: false
-      
-    #   # windowSize: "fullscreen"
-    #   enablePopups: false
+  - browserName: Chrome
+    os: Windows
+    osVersion: 11
+    browserVersion: 131
+  - browserName: Edge
+    os: Windows
+    osVersion: 11
+    browserVersion: 130
 buildIdentifier: "${BUILD_NUMBER}"
 consoleLogs: info
 buildName: "After Ntwork LOGS"

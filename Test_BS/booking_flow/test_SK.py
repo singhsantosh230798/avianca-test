@@ -4,7 +4,7 @@ import random
 
 import pytest
 from selenium import webdriver
-from selenium.common import TimeoutException, WebDriverException, NoSuchElementException
+from selenium.common import TimeoutException, WebDriverException, NoSuchElementException,StaleElementReferenceException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -53,116 +53,162 @@ class SeleniumHelper:
 
         # Click on an element
 
-    def click_element(self, by_selector, selector_element):
+    def click_element(self, by_selector, selector_element, timeout=5):
         try:
+            # Determine which strategy to use for locating the element
             if by_selector == "xpath":
-                # Wait until the element is clickable
-                element = WebDriverWait(self.driver, 5).until(
+                element = WebDriverWait(self.driver, timeout).until(
                     EC.element_to_be_clickable((By.XPATH, selector_element))
                 )
-                element.click()
-                print(f"[{self.get_current_time()}] - Clicked on element: {selector_element}")
             elif by_selector == "xpath-scroll":
-                # Wait until the element is clickable
-                element = WebDriverWait(self.driver, 5).until(
+                element = WebDriverWait(self.driver, timeout).until(
                     EC.element_to_be_clickable((By.XPATH, selector_element))
                 )
-                # Scroll to the element if necessary
+                # Scroll to the element if it's not in view
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                # Click the element
-                element.click()
-                print(f"[{self.get_current_time()}] - Clicked on element after scroll: {selector_element}")
+            
+            # Perform the click
+            element.click()
+            print(f"[{self.get_current_time()}] - Clicked on element: {selector_element}")
+        
+        except StaleElementReferenceException:
+            # Retry if the element reference is stale (removed from DOM)
+            print(f"[{self.get_current_time()}] - Element became stale, retrying click: {selector_element}")
+            self.click_element(by_selector, selector_element, timeout)
+        
+        except TimeoutException:
+            # Handle timeout if the element is not clickable within the given time
+            print(f"[{self.get_current_time()}] - Timeout while waiting for element: {selector_element}")
+        
         except Exception as e:
-            print(f"[{self.get_current_time()}] - Error while clicking: {e}")
+            # General exception handling for other errors
+            print(f"[{self.get_current_time()}] - Error while clicking on {selector_element}: {e}")
+
 
         # Type text into an element
 
-    def type_text(self, by_selector, selector_element, text):
+    def type_text(self, by_selector, selector_element, text, timeout=2, retries=1):
+    # Locate the element based on the selector type
         try:
             if by_selector == "xpath":
-                element = WebDriverWait(self.driver, 5).until(
+                # Directly wait for visibility with a reduced timeout
+                element = WebDriverWait(self.driver, timeout).until(
                     EC.visibility_of_element_located((By.XPATH, selector_element))
                 )
-                element.clear()
-                element.send_keys(text)
-                print(f"Text entered in {selector_element}: {text}")
+                element.clear()  # Clear the field before typing
+                element.send_keys(text)  # Type the text
+                print(f"[{self.get_current_time()}] - Text entered in {selector_element}: {text}")
+                return  # Exit after successful typing
+        except StaleElementReferenceException as e:
+            print(f"[{self.get_current_time()}] - Stale element error: {e}")
+            if retries > 0:
+                # Retry logic for stale element if retries remain
+                return self.type_text(by_selector, selector_element, text, timeout, retries - 1)
+            else:
+                print(f"[{self.get_current_time()}] - Max retries reached for stale element: {selector_element}")
+                return
+        except TimeoutException as e:
+            print(f"[{self.get_current_time()}] - Timeout while waiting for element: {selector_element}")
+            return
         except Exception as e:
-            print(f"Error while typing text: {e}")
+            print(f"[{self.get_current_time()}] - Error while typing text in {selector_element}: {e}")
 
         # Wait for an element to become visible
 
     def wait_for_visibility_of_element_located(self, by_selector, selector_element, wait_time=40):
         try:
-            if by_selector == "xpath":
-                WebDriverWait(self.driver, wait_time).until(
-                    EC.visibility_of_element_located((By.XPATH, selector_element))
-                )
-                print(f"[{self.get_current_time()}] - Element visible: {selector_element}")
-                return True
-            elif by_selector == "id":
-                WebDriverWait(self.driver, wait_time).until(
-                    EC.visibility_of_element_located((By.ID, selector_element))
-                )
-                print(f"[{self.get_current_time()}] - Element visible: {selector_element}")
-                return True
-            else:
+            # Map selector types to By selectors
+            selector_mapping = {
+                "xpath": By.XPATH,
+                "id": By.ID,
+                "css": By.CSS_SELECTOR,
+                "class_name": By.CLASS_NAME
+            }
+
+            # Get the appropriate selector type
+            if by_selector not in selector_mapping:
                 print(f"[{self.get_current_time()}] - Invalid selector type: {by_selector}")
                 return False
+
+            # Wait for visibility of the element using the mapped selector
+            WebDriverWait(self.driver, wait_time).until(
+                EC.visibility_of_element_located((selector_mapping[by_selector], selector_element))
+            )
+            print(f"[{self.get_current_time()}] - Element visible: {selector_element}")
+            return True
         except TimeoutException:
             print(f"[{self.get_current_time()}] - Timeout waiting for element to be visible: {selector_element}")
+            return False
+        except Exception as e:
+            print(f"[{self.get_current_time()}] - Error occurred while waiting for visibility of {selector_element}: {e}")
             return False
 
         # Wait for an element to become invisible
 
     def wait_for_invisibility_of_element_located(self, by_selector, selector_element, wait_time=40):
         try:
-            if by_selector == "xpath":
-                WebDriverWait(self.driver, wait_time).until(
-                    EC.invisibility_of_element_located((By.XPATH, selector_element))
-                )
-                print(f"[{self.get_current_time()}] - Element invisible: {selector_element}")
-                return True
-            elif by_selector == "id":
-                WebDriverWait(self.driver, wait_time).until(
-                    EC.invisibility_of_element_located((By.ID, selector_element))
-                )
-                print(f"[{self.get_current_time()}] - Element invisible: {selector_element}")
-                return True
-            else:
+            # Map selector types to By selectors
+            selector_mapping = {
+                "xpath": By.XPATH,
+                "id": By.ID,
+                "css": By.CSS_SELECTOR,
+                "class_name": By.CLASS_NAME
+            }
+
+            # Get the appropriate selector type
+            if by_selector not in selector_mapping:
                 print(f"[{self.get_current_time()}] - Invalid selector type: {by_selector}")
                 return False
+
+            # Wait for invisibility of the element using the mapped selector
+            WebDriverWait(self.driver, wait_time).until(
+                EC.invisibility_of_element_located((selector_mapping[by_selector], selector_element))
+            )
+            print(f"[{self.get_current_time()}] - Element invisible: {selector_element}")
+            return True
         except TimeoutException:
             print(f"[{self.get_current_time()}] - Timeout waiting for element to be invisible: {selector_element}")
             return False
+        except Exception as e:
+            print(f"[{self.get_current_time()}] - Error occurred while waiting for invisibility of {selector_element}: {e}")
+            return False
 
         # Wait for a loader to disappear
-
-    def wait_for_loader_invisibility(self, selector_element, wait_for_visibility=20, wait_for_invisibility=60):
+    def wait_for_loader_invisibility(self, selector_element, wait_for_invisibility=60):
         try:
-            WebDriverWait(self.driver, wait_for_visibility).until(
-                EC.visibility_of_element_located((By.XPATH, selector_element))
-            )
+            # Wait for the loader to become invisible
             WebDriverWait(self.driver, wait_for_invisibility).until(
                 EC.invisibility_of_element_located((By.XPATH, selector_element))
             )
             print(f"Loader invisible: {selector_element}")
+            return True
+        except TimeoutException:
+            print(f"Timeout waiting for loader to be invisible: {selector_element}")
+            return False
         except Exception as e:
-            print(f"Error waiting for loader invisibility: {e}")
+            print(f"Error while waiting for loader invisibility: {e}")
+            return False
 
         # Fetch dropdown options and select a random one
 
     def get_options(self, by_selector, options_locator):
         options = []
         try:
+            # Reduce timeout to speed up execution and try using presence instead of visibility
+            timeout = 2  # Reduced wait time
+
+            # Use presence_of_all_elements_located for faster results
             if by_selector == "xpath":
-                options = WebDriverWait(self.driver, 5).until(
-                    EC.visibility_of_all_elements_located((By.XPATH, options_locator))
+                options = WebDriverWait(self.driver, timeout).until(
+                    EC.presence_of_all_elements_located((By.XPATH, options_locator))
                 )
             elif by_selector == "id":
-                options = WebDriverWait(self.driver, 5).until(
-                    EC.visibility_of_all_elements_located((By.ID, options_locator))
+                options = WebDriverWait(self.driver, timeout).until(
+                    EC.presence_of_all_elements_located((By.ID, options_locator))
                 )
+
             if options:
+                # Choose a random option and return its text
                 selected_option = random.choice(options)
                 selected_option_text = selected_option.text
                 print(f"[{self.get_current_time()}] - Selected option: {selected_option_text}")
@@ -170,6 +216,7 @@ class SeleniumHelper:
             else:
                 print(f"[{self.get_current_time()}] - No options found with locator: {options_locator}")
                 return None
+
         except WebDriverException as exception:
             print(exception.msg)
             print(f"[{self.get_current_time()}] - Unable to get options from dropdown: {options_locator}")
@@ -177,24 +224,31 @@ class SeleniumHelper:
 
     def wait_for_visibility_of_element_located_instant(self, by_selector, selector_element):
         try:
+            # Find element immediately
             if by_selector == "xpath":
                 element = self.driver.find_element(By.XPATH, selector_element)
             elif by_selector == "id":
                 element = self.driver.find_element(By.ID, selector_element)
             else:
-                print(f"[{self.get_current_time()}] - " + f"Invalid selector type: {by_selector}")
+                print(f"[{self.get_current_time()}] - Invalid selector type: {by_selector}")
                 return False
 
-            # Verify visibility of element found
+            # Verify visibility of element
             if element.is_displayed():
-                print(f"[{self.get_current_time()}] - " + f"Element visible: {selector_element}")
+                print(f"[{self.get_current_time()}] - Element visible: {selector_element}")
                 return True
             else:
-                print(f"[{self.get_current_time()}] - " + f"Element found but not visible: {selector_element}")
+                print(f"[{self.get_current_time()}] - Element found but not visible: {selector_element}")
                 return False
 
         except NoSuchElementException:
-            print(f"[{self.get_current_time()}] - " + f"Element not found: {selector_element}")
+            print(f"[{self.get_current_time()}] - Element not found: {selector_element}")
+            return False
+        except StaleElementReferenceException:
+            print(f"[{self.get_current_time()}] - Element is stale and no longer attached to the DOM: {selector_element}")
+            return False
+        except Exception as e:
+            print(f"[{self.get_current_time()}] - Error occurred while checking element visibility: {e}")
             return False
 
     def select_gender(self):
@@ -222,6 +276,7 @@ class SeleniumHelper:
         selected_value = self.get_options('xpath', "//li/button[@class='ui-dropdown_item_option']")
         if selected_value:
             self.click_element('xpath', f"//li[starts-with(@class,'ui-dropdown_item') and contains(.,'{selected_value}')]")
+   
 
     def select_month(self):
         self.click_element('xpath', "//*[starts-with(@id,'dateMonthId_')][not(contains(@class,'has-value'))]")
@@ -327,8 +382,9 @@ def test_main(helper):
     helper.click_element("xpath", "//*[@class='button control_options_selector_action_button']")
     # 10. Click on the search button
     helper.click_element("xpath", "//*[@id='searchButton' and not(contains(@style,'display:none;'))]")
+
     # 11. Wait for the loader to disappear
-    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 20, 60)
+    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 60)
     # 12. Assert that the element with the class "journey-no-data" is not visible
     assert not helper.wait_for_visibility_of_element_located("xpath", "//div[contains(@class,'journey-no-data')]", 4), "No flight(s) available"
     # 13. Assert that the element with the class "day-selector_container" is visible instantly
@@ -341,7 +397,7 @@ def test_main(helper):
     # 16. Click on the fare control options
     helper.click_element("xpath", "//div[contains(@class,'fare-control')][contains(.,'light') or contains(.,'basic') or contains(.,'classic') or contains(.,'flex') or contains(.,'business')]")
     # 17. Wait for the loader to disappear
-    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 4, 40)
+    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]",40)
     # 18. Assert again that no flight data is visible
     assert not helper.wait_for_visibility_of_element_located("xpath", "//div[contains(@class,'journey-no-data')]", 4), "No flight(s) available"
     # 19. Click again on the journey select option
@@ -349,11 +405,11 @@ def test_main(helper):
     # 20. Click on the fare control options again
     helper.click_element("xpath", "//div[contains(@class,'fare-control')][contains(.,'light') or contains(.,'basic') or contains(.,'classic') or contains(.,'flex') or contains(.,'business')]")
     # 21. Wait for the loader to disappear
-    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 4, 40)
+    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 40)
     # 22. Click on the page button
     helper.click_element("xpath", "//button[contains(@class,'page_button-primary-flow')]")
     # 23. Wait for the loader to disappear again
-    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 20, 60)
+    helper.wait_for_loader_invisibility("//div[contains(@class,'loading')]", 60)
 
     # The while loop starts here
     while helper.wait_for_visibility_of_element_located("xpath", "//button[starts-with(@id,'IdDocNationality') and not(contains(@class,'has-value'))]", 2):
