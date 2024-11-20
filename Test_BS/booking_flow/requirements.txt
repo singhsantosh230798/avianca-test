@@ -7,3 +7,4 @@ pytest-variables
 pytest-selenium
 browserstack-sdk
 pytest-html==3.2.0
+webdriver-manager==4.0.2
